@@ -10,17 +10,18 @@ const (
 
 	misc_begin
 	// Misc characters
-	ASTERISK
+	COMMA
+	SEMICOLON
 
 	misc_end
 
-	literal_begin
 	// Identifiers
-	COMMA
-	FLOAT
 	IDENT
+	ASTERISK
+
+	literal_begin
+	FLOAT
 	INT
-	SEMICOLON
 	STRING
 
 	literal_end
@@ -38,18 +39,20 @@ const (
 
 	keyword_begin
 	// Keywords
+	AND
 	BY
 	DISTINCT
 	FROM
-	JOIN
-	INNER
-	OUTER
-	LEFT
 	GROUP
 	HAVING
+	INNER
+	JOIN
+	LEFT
 	LIMIT
 	OFFSET
+	OR
 	ORDER
+	OUTER
 	SELECT
 	WHERE
 
@@ -57,6 +60,8 @@ const (
 )
 
 var tokens = map[Token]string{
+	OR:        "OR",
+	AND:       "AND",
 	ASTERISK:  "ASTERISK",
 	COMMA:     "COMMA",
 	DISTINCT:  "DISTINCT",
@@ -88,6 +93,8 @@ var tokens = map[Token]string{
 	NEQ:       "NEQ",
 }
 var keywords = map[string]Token{
+	"OR":       OR,
+	"AND":      AND,
 	"BY":       BY,
 	"DISTINCT": DISTINCT,
 	"FROM":     FROM,
@@ -114,9 +121,9 @@ func (t Token) String() string {
 
 func (t Token) IsMisc() bool { return t >= misc_begin && t <= misc_end }
 
-func (t Token) IsOperator() bool { return t >= operator_begin && t <= operator_end }
+func (t Token) IsComparisonOperator() bool { return t >= operator_begin && t <= operator_end }
 
-func (t Token) IsIdentifier() bool { return t >= literal_begin && t <= literal_end }
+func (t Token) IsLiteral() bool { return t >= literal_begin && t <= literal_end }
 
 func (t Token) IsKeyword() bool { return t >= keyword_begin && t <= keyword_end }
 

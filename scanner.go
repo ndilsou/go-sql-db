@@ -166,7 +166,6 @@ func (s *Scanner) scanOperators() string {
 	}
 
 	return sb.String()
-
 }
 
 func (s *Scanner) skipWhitespaces() {

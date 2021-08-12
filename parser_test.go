@@ -11,7 +11,7 @@ import (
 
 // Ensure the parser can parse strings into Statement ASTs.
 func TestParser_ParseStatement(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		s    string
 		stmt *sql.SelectStmt
 		err  string
@@ -20,8 +20,10 @@ func TestParser_ParseStatement(t *testing.T) {
 		{
 			s: `SELECT name FROM tbl`,
 			stmt: &sql.SelectStmt{
-				Fields:    []string{"name"},
-				TableName: "tbl",
+				Fields:    []*sql.Ident{{Name: "name"}},
+				TableName: sql.Ident{Name: "tbl"},
+				// Fields:    []string{"name"},
+				// TableName: "tbl",
 			},
 		},
 
@@ -29,8 +31,10 @@ func TestParser_ParseStatement(t *testing.T) {
 		{
 			s: `SELECT first_name, last_name, age FROM my_table`,
 			stmt: &sql.SelectStmt{
-				Fields:    []string{"first_name", "last_name", "age"},
-				TableName: "my_table",
+				Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				TableName: sql.Ident{Name: "my_table"},
+				// Fields:    []string{"first_name", "last_name", "age"},
+				// TableName: "my_table",
 			},
 		},
 
@@ -42,16 +46,16 @@ func TestParser_ParseStatement(t *testing.T) {
 
 FROM my_table`,
 			stmt: &sql.SelectStmt{
-				Fields:    []string{"first_name", "last_name", "age"},
-				TableName: "my_table",
+				Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				TableName: sql.Ident{Name: "my_table"},
 			},
 		},
 		// Offset Limit statement
 		{
 			s: `SELECT first_name, last_name, age FROM my_table OFFSET 100 LIMIT 4`,
 			stmt: &sql.SelectStmt{
-				Fields:       []string{"first_name", "last_name", "age"},
-				TableName:    "my_table",
+				Fields:       []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				TableName:    sql.Ident{Name: "my_table"},
 				LimitClause:  &sql.LimitClause{Value: 4},
 				OffsetClause: &sql.OffsetClause{Value: 100},
 			},
@@ -61,10 +65,44 @@ FROM my_table`,
 		{
 			s: `SELECT first_name, last_name, age FROM my_table GROUP BY first_name, last_name`,
 			stmt: &sql.SelectStmt{
-				Fields:    []string{"first_name", "last_name", "age"},
-				TableName: "my_table",
+				Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				TableName: sql.Ident{Name: "my_table"},
 				GroupByClause: &sql.GroupByClause{
-					Fields: []string{"first_name", "last_name"},
+					Fields: []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}},
+				},
+			},
+		},
+
+		// Where with multiple statement
+		{
+			s: `SELECT first_name, last_name, age 
+					FROM my_table 
+					WHERE first_name = 1 AND last_name <> 'TEST' OR age > 18;`,
+			stmt: &sql.SelectStmt{
+				Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				TableName: sql.Ident{Name: "my_table"},
+				WhereClause: &sql.WhereClause{
+					Predicate: &sql.BinaryExpr{
+						LHS: &sql.BinaryExpr{
+							LHS: &sql.Ident{Name: "first_name"},
+							Op:  sql.EQ,
+							RHS: &sql.BasicLit{Kind: sql.INT, Value: "1"},
+						},
+						Op: sql.AND,
+						RHS: &sql.BinaryExpr{
+							LHS: &sql.BinaryExpr{
+								LHS: &sql.Ident{Name: "last_name"},
+								Op:  sql.NEQ,
+								RHS: &sql.BasicLit{Kind: sql.STRING, Value: "'TEST'"},
+							},
+							Op: sql.OR,
+							RHS: &sql.BinaryExpr{
+								LHS: &sql.Ident{Name: "age"},
+								Op:  sql.GT,
+								RHS: &sql.BasicLit{Kind: sql.INT, Value: "18"},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -73,18 +111,42 @@ FROM my_table`,
 		{
 			s: `SELECT first_name, last_name, age FROM my_table WHERE first_name = 1`,
 			stmt: &sql.SelectStmt{
-				Fields:      []string{"first_name", "last_name", "age"},
-				TableName:   "my_table",
-				WhereClause: &sql.WhereClause{},
+				Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				TableName: sql.Ident{Name: "my_table"},
+				WhereClause: &sql.WhereClause{
+					Predicate: &sql.BinaryExpr{
+						LHS: &sql.Ident{Name: "first_name"},
+						Op:  sql.EQ,
+						RHS: &sql.BasicLit{Kind: sql.INT, Value: "1"},
+					},
+				},
 			},
 		},
+
+		// // Where statement
+		// {
+		// 	s: `SELECT first_name, last_name, age FROM my_table WHERE first_name = 1`,
+		// 	stmt: &sql.SelectStmt{
+		// 		Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+		// 		TableName: sql.Ident{Name: "my_table"},
+		// 		WhereClause: &sql.WhereClause{
+		// 			Predicate: sql.LogicalExpr{
+		// 				Expr: &sql.BinaryExpr{
+		// 					LHS: &sql.Ident{Name: "first_name"},
+		// 					Op:  sql.EQ,
+		// 					RHS: &sql.BasicLit{Kind: sql.INT, Value: "1"},
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// },
 
 		// Select all statement
 		{
 			s: `SELECT * FROM my_table`,
 			stmt: &sql.SelectStmt{
-				Fields:    []string{"*"},
-				TableName: "my_table",
+				Fields:    []*sql.Ident{{Name: "*"}},
+				TableName: sql.Ident{Name: "my_table"},
 			},
 		},
 

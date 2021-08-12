@@ -70,7 +70,7 @@ func parseStmtInit(p *Parser) parseFunc {
 
 func parseSelectFields(p *Parser) parseFunc {
 	if l := p.scan(); l.Token == IDENT || l.Token == ASTERISK {
-		p.stmt.Fields = append(p.stmt.Fields, l.Lit)
+		p.stmt.Fields = append(p.stmt.Fields, &Ident{Name: l.Lit})
 	} else {
 		p.err = fmt.Errorf("found \"%s\", expected field", l.Lit)
 		return nil
@@ -91,7 +91,7 @@ func parseFrom(p *Parser) parseFunc {
 	}
 
 	if l := p.scan(); l.Token == IDENT {
-		p.stmt.TableName = l.Lit
+		p.stmt.TableName = Ident{Name: l.Lit}
 	} else {
 		p.err = fmt.Errorf("found \"%s\", expected table name", l.Lit)
 		return nil
@@ -174,7 +174,7 @@ func parseGroupBy(p *Parser) parseFunc {
 
 func parseGroupByFields(p *Parser) parseFunc {
 	if l := p.scan(); l.Token == IDENT {
-		p.stmt.GroupByClause.Fields = append(p.stmt.GroupByClause.Fields, l.Lit)
+		p.stmt.GroupByClause.Fields = append(p.stmt.GroupByClause.Fields, &Ident{Name: l.Lit})
 	} else {
 		p.err = fmt.Errorf("found \"%s\", expected field", l.Lit)
 		return nil
@@ -216,7 +216,30 @@ func parseWhere(p *Parser) parseFunc {
 }
 
 func parseWherePredicates(p *Parser) parseFunc {
-	panic("not implemented")
+	predicate, err := scanLogicalExpr(p)
+	if err != nil {
+		p.err = err
+		return nil
+	}
+
+	p.stmt.WhereClause.Predicate = predicate
+
+	var next parseFunc
+	switch nextLex := p.peek(); nextLex.Token {
+	case EOF, SEMICOLON:
+		next = parseTerminalLexeme
+	case GROUP:
+		next = parseGroupBy
+	case OFFSET:
+		next = parseOffset
+	case LIMIT:
+		next = parseLimit
+	default:
+		p.err = fmt.Errorf("found \"%s\", invalid after WHERE <predicate>", nextLex.Lit)
+		next = nil
+	}
+
+	return next
 }
 
 func parseOffset(p *Parser) parseFunc {
@@ -258,9 +281,61 @@ func parseOffset(p *Parser) parseFunc {
 
 func parseTerminalLexeme(p *Parser) parseFunc {
 	l := p.scan()
-	if l.Token != EOF {
+	if l.Token != EOF && l.Token != SEMICOLON {
 		p.err = fmt.Errorf("found \"%s\", expected EOF", l.Lit)
 	}
 
 	return nil
+}
+
+func toLiteralExpr(l Lexeme) (Expr, error) {
+	var expr Expr
+	if l.Token == IDENT {
+		expr = &Ident{Name: l.Lit}
+	} else if l.Token.IsLiteral() {
+		expr = &BasicLit{
+			Kind:  l.Token,
+			Value: l.Lit,
+		}
+	} else {
+		return nil, fmt.Errorf("found \"%s\", expected literal", l.Lit)
+	}
+	return expr, nil
+}
+
+func scanLogicalExpr(p *Parser) (Expr, error) {
+	var expr BinaryExpr
+	l := p.scan()
+	if lhs, err := toLiteralExpr(l); err == nil {
+		expr.LHS = lhs
+	} else {
+		return nil, err
+	}
+
+	l = p.scan()
+	if !l.Token.IsComparisonOperator() {
+		return nil, fmt.Errorf("found \"%s\", expected comparison operator", l.Lit)
+	}
+	expr.Op = l.Token
+
+	l = p.scan()
+	if rhs, err := toLiteralExpr(l); err == nil {
+		expr.RHS = rhs
+	} else {
+		p.err = err
+		return nil, err
+	}
+
+	var predicate Expr
+	if op := p.scan(); op.Token == AND || op.Token == OR {
+		rhs, err := scanLogicalExpr(p)
+		if err != nil {
+			return nil, err
+		}
+		predicate = &BinaryExpr{LHS: &expr, Op: op.Token, RHS: rhs}
+	} else {
+		p.unscan()
+		predicate = &expr
+	}
+	return predicate, nil
 }

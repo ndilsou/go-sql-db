@@ -1,5 +1,9 @@
 package sql
 
+type Stmt interface {
+	stmtNode()
+}
+
 type SelectStmt struct {
 	TableName     Ident
 	Fields        []*Ident
@@ -8,6 +12,8 @@ type SelectStmt struct {
 	LimitClause   *LimitClause
 	OffsetClause  *OffsetClause
 }
+
+func (*SelectStmt) stmtNode() {}
 
 type Expr interface {
 	exprNode()

@@ -1,16 +1,26 @@
 package sql
 
+type JoinKind int
+
+const (
+	InnerJoin JoinKind = iota
+	LeftOuterJoin
+	RightOuterJoin
+	FullOuterJoin
+)
+
 type Stmt interface {
 	stmtNode()
 }
 
 type SelectStmt struct {
-	TableName     Ident
-	Fields        []*Ident
-	WhereClause   *WhereClause
-	GroupByClause *GroupByClause
-	LimitClause   *LimitClause
-	OffsetClause  *OffsetClause
+	From    FromClause
+	Fields  []Ident
+	Where   *WhereClause
+	GroupBy *GroupByClause
+	OrderBy *OrderByClause
+	Limit   *LimitClause
+	Offset  *OffsetClause
 }
 
 func (*SelectStmt) stmtNode() {}
@@ -39,26 +49,41 @@ type BinaryExpr struct {
 	RHS Expr
 }
 
-type LogicalExpr struct {
-	Expr      Expr
-	IsNegated bool
-	Op        *Token
-	Then      *LogicalExpr
+type AliasExpr struct {
+	Expr  Expr
+	Alias Ident
 }
 
-func (*Ident) exprNode()       {}
-func (*BasicLit) exprNode()    {}
-func (*UnaryExpr) exprNode()   {}
-func (*BinaryExpr) exprNode()  {}
-func (*LogicalExpr) exprNode() {}
+func (*Ident) exprNode()      {}
+func (*BasicLit) exprNode()   {}
+func (*UnaryExpr) exprNode()  {}
+func (*BinaryExpr) exprNode() {}
+func (*AliasExpr) exprNode()  {}
 
 type WhereClause struct {
-	// Predicate LogicalExpr
 	Predicate Expr
 }
+
+type OrderByClause struct {
+	Fields []*Ident
+}
+
 type GroupByClause struct {
 	Fields []*Ident
 }
+
+type FromClause struct {
+	TableName Expr
+	Join      *JoinSubClause
+}
+
+type JoinSubClause struct {
+	TableName Expr
+	Kind      JoinKind
+	Criterion BinaryExpr
+	Join      *JoinSubClause
+}
+
 type LimitClause struct{ Value int }
 type OffsetClause struct{ Value int }
 

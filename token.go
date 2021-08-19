@@ -4,7 +4,7 @@ type Token int
 
 const (
 	// Special tokens
-	EOF Token = iota
+	EOF Token = iota + 1
 	ILLEGAL
 	WS
 
@@ -40,6 +40,7 @@ const (
 	keyword_begin
 	// Keywords
 	AND
+	AS
 	BY
 	DISTINCT
 	FROM
@@ -48,8 +49,11 @@ const (
 	INNER
 	JOIN
 	LEFT
+	RIGHT
+	FULL
 	LIMIT
 	OFFSET
+	ON
 	OR
 	ORDER
 	OUTER
@@ -60,15 +64,18 @@ const (
 )
 
 var tokens = map[Token]string{
-	OR:        "OR",
 	AND:       "AND",
+	AS:        "AS",
 	ASTERISK:  "ASTERISK",
 	COMMA:     "COMMA",
 	DISTINCT:  "DISTINCT",
 	EOF:       "EOF",
+	EQ:        "EQ",
 	FLOAT:     "FLOAT",
 	FROM:      "FROM",
 	GROUP:     "GROUP BY",
+	GT:        "GT",
+	GTE:       "GTE",
 	HAVING:    "HAVING",
 	IDENT:     "IDENT",
 	ILLEGAL:   "ILLEGAL",
@@ -77,7 +84,12 @@ var tokens = map[Token]string{
 	JOIN:      "JOIN",
 	LEFT:      "LEFT",
 	LIMIT:     "LIMIT",
+	LT:        "LT",
+	LTE:       "LTE",
+	NEQ:       "NEQ",
 	OFFSET:    "OFFSET",
+	ON:        "ON",
+	OR:        "OR",
 	ORDER:     "ORDER BY",
 	OUTER:     "OUTER",
 	SELECT:    "SELECT",
@@ -85,15 +97,10 @@ var tokens = map[Token]string{
 	STRING:    "STRING",
 	WHERE:     "WHERE",
 	WS:        "WS",
-	EQ:        "EQ",
-	GT:        "GT",
-	GTE:       "GTE",
-	LT:        "LT",
-	LTE:       "LTE",
-	NEQ:       "NEQ",
+	RIGHT:     "RIGHT",
+	FULL:      "FULL",
 }
 var keywords = map[string]Token{
-	"OR":       OR,
 	"AND":      AND,
 	"BY":       BY,
 	"DISTINCT": DISTINCT,
@@ -105,10 +112,14 @@ var keywords = map[string]Token{
 	"LEFT":     LEFT,
 	"LIMIT":    LIMIT,
 	"OFFSET":   OFFSET,
+	"ON":       ON,
+	"OR":       OR,
 	"ORDER":    ORDER,
 	"OUTER":    OUTER,
 	"SELECT":   SELECT,
 	"WHERE":    WHERE,
+	"RIGHT":    RIGHT,
+	"FULL":     FULL,
 }
 
 func (t Token) String() string {

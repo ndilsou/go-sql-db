@@ -143,3 +143,52 @@ func TestScanner_Scan_Sequence(t *testing.T) {
 		})
 	}
 }
+
+// var benchRes sql.Lexeme
+
+func BenchmarkScanner_Scan(b *testing.B) {
+	b.SkipNow()
+	benchmarks := []struct {
+		name  string
+		query string
+	}{
+		{
+			name:  "simple select",
+			query: "SELECT first_name FROM my_table",
+		},
+		{
+			name: "complex query",
+			query: `SELECT first_name, last_name, age 
+FROM my_table 
+WHERE age = 1 AND first_name <> 'yolo'
+GROUP BY first_name, last_name OFFSET 10 LIMIT 5`,
+		},
+		{
+			name: "select and where",
+			query: `SELECT first_name, last_name, age 
+FROM my_table 
+WHERE age = 1 AND first_name <> 'yolo'`,
+		},
+		{
+			name:  "has error",
+			query: "SELECT first_name FROM my_table WHERE FROM",
+		},
+		{},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			r := strings.NewReader(bm.query)
+			var l sql.Lexeme
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				s := sql.NewScanner(r)
+				for {
+					l = s.Scan()
+					if l.Token.IsTerminal() || l.Token == sql.ILLEGAL {
+						break
+					}
+				}
+			}
+		})
+	}
+}

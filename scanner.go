@@ -8,6 +8,7 @@ import (
 )
 
 var eof = rune(0)
+var bufSizeHint = 32
 
 type Lexeme struct {
 	Token Token
@@ -19,7 +20,8 @@ type Scanner struct {
 }
 
 func NewScanner(r *strings.Reader) *Scanner {
-	return &Scanner{bufio.NewReader(r)}
+	s := Scanner{r: bufio.NewReader(r)}
+	return &s
 }
 
 func (s *Scanner) Scan() Lexeme {
@@ -84,6 +86,7 @@ func (s *Scanner) peek() rune {
 
 func (s *Scanner) scanLiterals() string {
 	var sb strings.Builder
+	sb.Grow(bufSizeHint)
 	for {
 		ch := s.read()
 		if !isAlphanumeric(ch) {
@@ -104,6 +107,7 @@ func (s *Scanner) scanLiterals() string {
 
 func (s *Scanner) scanWhitespaces() Lexeme {
 	var sb strings.Builder
+	sb.Grow(bufSizeHint)
 	for {
 		ch := s.read()
 		if !isWhitespace(ch) {
@@ -117,6 +121,8 @@ func (s *Scanner) scanWhitespaces() Lexeme {
 
 func (s *Scanner) scanNumerics() string {
 	var sb strings.Builder
+	sb.Grow(bufSizeHint)
+
 	ch := s.read()
 	sb.WriteRune(ch)
 
@@ -141,6 +147,7 @@ func (s *Scanner) scanNumerics() string {
 
 func (s *Scanner) scanStringLiterals() string {
 	var sb strings.Builder
+	sb.Grow(bufSizeHint)
 	ch := s.read()
 	sb.WriteRune(ch)
 
@@ -155,6 +162,7 @@ func (s *Scanner) scanStringLiterals() string {
 
 func (s *Scanner) scanOperators() string {
 	var sb strings.Builder
+	sb.Grow(bufSizeHint)
 	ch1 := s.read()
 	sb.WriteRune(ch1)
 

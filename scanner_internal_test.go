@@ -52,7 +52,6 @@ func Test_isLetter(t *testing.T) {
 		ch   rune
 		want bool
 	}{
-		// TODO: Add test cases.
 		{
 			name: "newline",
 			ch:   '\n',

@@ -18,7 +18,7 @@ func TestScanner_Scan(t *testing.T) {
 		// Special tokens (EOF, ILLEGAL, WS)
 		{s: ``, item: sql.Lexeme{Token: sql.EOF}},
 		{s: `#`, item: sql.Lexeme{Token: sql.ILLEGAL, Lit: `#`}},
-		{s: ` `, item: sql.Lexeme{Token: sql.WS, Lit: " "}},
+		{s: ` `, item: sql.Lexeme{Token: sql.EOF, Lit: ""}},
 		{s: `,`, item: sql.Lexeme{Token: sql.COMMA, Lit: ","}},
 		{s: "\t", item: sql.Lexeme{Token: sql.EOF, Lit: ""}},
 		{s: "\n", item: sql.Lexeme{Token: sql.EOF, Lit: ""}},
@@ -50,6 +50,7 @@ func TestScanner_Scan(t *testing.T) {
 		{s: `+9`, item: sql.Lexeme{Token: sql.INT, Lit: `+9`}},
 
 		// Keywords
+		{s: `ON`, item: sql.Lexeme{Token: sql.ON, Lit: "ON"}},
 		{s: `FROM`, item: sql.Lexeme{Token: sql.FROM, Lit: "FROM"}},
 		{s: `INNER`, item: sql.Lexeme{Token: sql.INNER, Lit: "INNER"}},
 		{s: `OUTER`, item: sql.Lexeme{Token: sql.OUTER, Lit: "OUTER"}},
@@ -100,6 +101,22 @@ func TestScanner_Scan_Sequence(t *testing.T) {
 				{Token: sql.IDENT, Lit: "yolo"},
 				{Token: sql.WHERE, Lit: "WHERE"},
 				{Token: sql.IDENT, Lit: "iam"},
+				{Token: sql.EOF, Lit: ""},
+			},
+		},
+		{
+			s: "SELECT *\nFROM yolo JOIN wow ON yolo.iam = wow.you_are",
+			items: []sql.Lexeme{
+				{Token: sql.SELECT, Lit: "SELECT"},
+				{Token: sql.ASTERISK, Lit: "*"},
+				{Token: sql.FROM, Lit: "FROM"},
+				{Token: sql.IDENT, Lit: "yolo"},
+				{Token: sql.JOIN, Lit: "JOIN"},
+				{Token: sql.IDENT, Lit: "wow"},
+				{Token: sql.ON, Lit: "ON"},
+				{Token: sql.IDENT, Lit: "yolo.iam"},
+				{Token: sql.EQ, Lit: "="},
+				{Token: sql.IDENT, Lit: "wow.you_are"},
 				{Token: sql.EOF, Lit: ""},
 			},
 		},

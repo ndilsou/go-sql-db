@@ -20,10 +20,12 @@ func TestParser_ParseStatement(t *testing.T) {
 		{
 			s: `SELECT name FROM tbl`,
 			stmt: &sql.SelectStmt{
-				Fields:    []*sql.Ident{{Name: "name"}},
-				TableName: sql.Ident{Name: "tbl"},
+				Fields: []sql.Ident{{Name: "name"}},
+				From: sql.FromClause{
+					TableName: &sql.Ident{Name: "tbl"},
+				},
 				// Fields:    []string{"name"},
-				// TableName: "tbl",
+				// From: "tbl",
 			},
 		},
 
@@ -31,10 +33,12 @@ func TestParser_ParseStatement(t *testing.T) {
 		{
 			s: `SELECT first_name, last_name, age FROM my_table`,
 			stmt: &sql.SelectStmt{
-				Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
-				TableName: sql.Ident{Name: "my_table"},
+				Fields: []sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				From: sql.FromClause{
+					TableName: &sql.Ident{Name: "my_table"},
+				},
 				// Fields:    []string{"first_name", "last_name", "age"},
-				// TableName: "my_table",
+				// From: "my_table",
 			},
 		},
 
@@ -46,18 +50,23 @@ func TestParser_ParseStatement(t *testing.T) {
 
 FROM my_table`,
 			stmt: &sql.SelectStmt{
-				Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
-				TableName: sql.Ident{Name: "my_table"},
+				Fields: []sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				From: sql.FromClause{
+					TableName: &sql.Ident{Name: "my_table"},
+				},
 			},
 		},
-		// Offset Limit statement
+		// Offset Value statement
 		{
-			s: `SELECT first_name, last_name, age FROM my_table OFFSET 100 LIMIT 4`,
+			s: `SELECT first_name, last_name, age FROM my_table ORDER BY age OFFSET 100 LIMIT 4`,
 			stmt: &sql.SelectStmt{
-				Fields:       []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
-				TableName:    sql.Ident{Name: "my_table"},
-				LimitClause:  &sql.LimitClause{Value: 4},
-				OffsetClause: &sql.OffsetClause{Value: 100},
+				Fields: []sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				From: sql.FromClause{
+					TableName: &sql.Ident{Name: "my_table"},
+				},
+				OrderBy: &sql.OrderByClause{Fields: []*sql.Ident{{Name: "age"}}},
+				Limit:   &sql.LimitClause{Value: 4},
+				Offset:  &sql.OffsetClause{Value: 100},
 			},
 		},
 
@@ -65,9 +74,25 @@ FROM my_table`,
 		{
 			s: `SELECT first_name, last_name, age FROM my_table GROUP BY first_name, last_name`,
 			stmt: &sql.SelectStmt{
-				Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
-				TableName: sql.Ident{Name: "my_table"},
-				GroupByClause: &sql.GroupByClause{
+				Fields: []sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				From: sql.FromClause{
+					TableName: &sql.Ident{Name: "my_table"},
+				},
+				GroupBy: &sql.GroupByClause{
+					Fields: []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}},
+				},
+			},
+		},
+
+		// Order By statement
+		{
+			s: `SELECT first_name, last_name, age FROM my_table ORDER BY first_name, last_name`,
+			stmt: &sql.SelectStmt{
+				Fields: []sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				From: sql.FromClause{
+					TableName: &sql.Ident{Name: "my_table"},
+				},
+				OrderBy: &sql.OrderByClause{
 					Fields: []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}},
 				},
 			},
@@ -79,9 +104,11 @@ FROM my_table`,
 					FROM my_table 
 					WHERE first_name = 1 AND last_name <> 'TEST' OR age > 18;`,
 			stmt: &sql.SelectStmt{
-				Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
-				TableName: sql.Ident{Name: "my_table"},
-				WhereClause: &sql.WhereClause{
+				Fields: []sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				From: sql.FromClause{
+					TableName: &sql.Ident{Name: "my_table"},
+				},
+				Where: &sql.WhereClause{
 					Predicate: &sql.BinaryExpr{
 						LHS: &sql.BinaryExpr{
 							LHS: &sql.Ident{Name: "first_name"},
@@ -111,9 +138,11 @@ FROM my_table`,
 		{
 			s: `SELECT first_name, last_name, age FROM my_table WHERE first_name = 1`,
 			stmt: &sql.SelectStmt{
-				Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
-				TableName: sql.Ident{Name: "my_table"},
-				WhereClause: &sql.WhereClause{
+				Fields: []sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
+				From: sql.FromClause{
+					TableName: &sql.Ident{Name: "my_table"},
+				},
+				Where: &sql.WhereClause{
 					Predicate: &sql.BinaryExpr{
 						LHS: &sql.Ident{Name: "first_name"},
 						Op:  sql.EQ,
@@ -123,30 +152,95 @@ FROM my_table`,
 			},
 		},
 
-		// // Where statement
+		// Select all statement
 		// {
-		// 	s: `SELECT first_name, last_name, age FROM my_table WHERE first_name = 1`,
+		// 	s: `SELECT a as b FROM my_table`,
 		// 	stmt: &sql.SelectStmt{
-		// 		Fields:    []*sql.Ident{{Name: "first_name"}, {Name: "last_name"}, {Name: "age"}},
-		// 		TableName: sql.Ident{Name: "my_table"},
-		// 		WhereClause: &sql.WhereClause{
-		// 			Predicate: sql.LogicalExpr{
-		// 				Expr: &sql.BinaryExpr{
-		// 					LHS: &sql.Ident{Name: "first_name"},
-		// 					Op:  sql.EQ,
-		// 					RHS: &sql.BasicLit{Kind: sql.INT, Value: "1"},
-		// 				},
-		// 			},
-		// 		},
+		// 		Fields:    []sql.Expr{&sql.AliasExpr{Expr: &sql.Ident{Name: "a"}, Alias: sql.Ident{Name: "b"}}},
+		// 		From: sql.Ident{Name: "my_table"},
 		// 	},
 		// },
+
+		// Join statement
+		{
+			s: `SELECT t1.a, t2.b FROM t1 JOIN t2 ON t1.a = t2.c`,
+			stmt: &sql.SelectStmt{
+				Fields: []sql.Ident{{Name: "t1.a"}, {Name: "t2.b"}},
+				From: sql.FromClause{
+					TableName: &sql.Ident{Name: "t1"},
+					Join: &sql.JoinSubClause{
+						TableName: &sql.Ident{Name: "t2"},
+						Kind:      sql.InnerJoin,
+						Criterion: sql.BinaryExpr{
+							LHS: &sql.Ident{Name: "t1.a"},
+							Op:  sql.EQ,
+							RHS: &sql.Ident{Name: "t2.c"},
+						},
+					},
+				},
+			},
+		},
+
+		// all types of join statement
+		{
+			s: `SELECT t1.a, t2.b 
+				FROM t1 
+					JOIN t2 ON t1.a = t2.c
+					LEFT JOIN t3 ON t2.d = t3.a
+					FULL JOIN t4 ON t1.a = t4.b
+					RIGHT OUTER JOIN t5 ON t3.c = t5.x`,
+			stmt: &sql.SelectStmt{
+				Fields: []sql.Ident{{Name: "t1.a"}, {Name: "t2.b"}},
+				From: sql.FromClause{
+					TableName: &sql.Ident{Name: "t1"},
+					Join: &sql.JoinSubClause{
+						TableName: &sql.Ident{Name: "t2"},
+						Kind:      sql.InnerJoin,
+						Criterion: sql.BinaryExpr{
+							LHS: &sql.Ident{Name: "t1.a"},
+							Op:  sql.EQ,
+							RHS: &sql.Ident{Name: "t2.c"},
+						},
+						Join: &sql.JoinSubClause{
+							TableName: &sql.Ident{Name: "t3"},
+							Kind:      sql.LeftOuterJoin,
+							Criterion: sql.BinaryExpr{
+								LHS: &sql.Ident{Name: "t2.d"},
+								Op:  sql.EQ,
+								RHS: &sql.Ident{Name: "t3.a"},
+							},
+							Join: &sql.JoinSubClause{
+								TableName: &sql.Ident{Name: "t4"},
+								Kind:      sql.FullOuterJoin,
+								Criterion: sql.BinaryExpr{
+									LHS: &sql.Ident{Name: "t1.a"},
+									Op:  sql.EQ,
+									RHS: &sql.Ident{Name: "t4.b"},
+								},
+								Join: &sql.JoinSubClause{
+									TableName: &sql.Ident{Name: "t5"},
+									Kind:      sql.RightOuterJoin,
+									Criterion: sql.BinaryExpr{
+										LHS: &sql.Ident{Name: "t3.c"},
+										Op:  sql.EQ,
+										RHS: &sql.Ident{Name: "t5.x"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 
 		// Select all statement
 		{
 			s: `SELECT * FROM my_table`,
 			stmt: &sql.SelectStmt{
-				Fields:    []*sql.Ident{{Name: "*"}},
-				TableName: sql.Ident{Name: "my_table"},
+				Fields: []sql.Ident{{Name: "*"}},
+				From: sql.FromClause{
+					TableName: &sql.Ident{Name: "my_table"},
+				},
 			},
 		},
 
@@ -155,7 +249,12 @@ FROM my_table`,
 		{s: `SELECT !`, err: `found "!", expected field`},
 		{s: `SELECT field xxx`, err: `found "xxx", expected FROM`},
 		{s: `SELECT field FROM *`, err: `found "*", expected table name`},
-		{s: `SELECT field FROM table OFFSET 1.5`, err: `found "1.5", expected INT`},
+		{s: `SELECT field FROM table OFFSET 1`, err: `found "OFFSET", invalid after FROM <table>`},
+		{s: `SELECT field FROM table ORDER BY field OFFSET 1.5`, err: `found "1.5", expected INT offset value`},
+		{s: `SELECT field FROM table ORDER BY field OFFSET -1`, err: `found "-1", expected nonnegative INT`},
+		{s: `SELECT field FROM table LIMIT -1`, err: `found "-1", expected nonnegative INT`},
+		{s: `SELECT field FROM table1 JOIN table2 LIMIT -1`, err: `found "LIMIT", expected ON keyword`},
+		{s: `SELECT field FROM table1 JOIN table2`, err: `found "", expected ON keyword`},
 	}
 
 	for i, tt := range tests {

@@ -276,3 +276,49 @@ func errstring(err error) string {
 	}
 	return ""
 }
+
+func BenchmarkParser_Parse(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		query string
+	}{
+		{
+			name:  "simple select",
+			query: "SELECT first_name FROM my_table",
+		},
+		{
+			name: "complex query",
+			query: `SELECT first_name, last_name, age
+FROM my_table
+WHERE age = 1 AND first_name <> 'yolo'
+GROUP BY first_name, last_name OFFSET 10 LIMIT 5`,
+		},
+		{
+			name: "select and where",
+			query: `SELECT first_name, last_name, age
+FROM my_table
+WHERE age = 1 AND first_name <> 'yolo'`,
+		},
+		{
+			name:  "has error",
+			query: "SELECT first_name FROM my_table WHERE FROM",
+		},
+	}
+	var stmt sql.Stmt
+	var err error
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			r := strings.NewReader(bm.query)
+			parser := sql.NewParser(r)
+			for i := 0; i < b.N; i++ {
+				r.Reset(bm.query)
+				stmt, err = parser.Parse()
+			}
+		})
+	}
+	ignoreBenchResult(stmt, err)
+}
+
+func ignoreBenchResult(_ interface{}, _ error) {
+
+}

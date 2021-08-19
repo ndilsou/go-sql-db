@@ -2,44 +2,18 @@ package sql
 
 import (
 	"errors"
+	"fmt"
 )
 
-/*
- Logical Plan Actions:
--
-*/
-type ParentRelationship int
-
-const (
-	OUTER_REL ParentRelationship = iota
-	INNER_REL
-)
-
+// PlanNode is a node in the query execution plan.
 type PlanNode interface {
-	Output() []string
-	ParentRelationship() ParentRelationship
-	Plans() []PlanNode
+	planNode()
 }
 
-func planNodePrecedence(node PlanNode) int {
-	var p int
-	switch node.(type) {
-	case *LimitNode:
-		p = 0
-	case *OffsetNode:
-		p = 1
-	case *SortNode:
-		p = 2
-	case *NestedLoopNode:
-		p = 3
-	case *FilterNode:
-		p = 4
-	case *TableScanNode:
-		p = 5
-	default:
-		p = -1
-	}
-	return p
+// ProjectionNode represents the columns to keep after a stage.
+type ProjectionNode struct {
+	Columns []Ident
+	From    PlanNode
 }
 
 // TableScanNode is a full table scan
@@ -48,106 +22,53 @@ type TableScanNode struct {
 	RelationName string
 }
 
-func (t *TableScanNode) Output() []string {
-	panic("implement me")
-}
-
-func (t *TableScanNode) ParentRelationship() ParentRelationship {
-	panic("implement me")
-}
-
-func (t *TableScanNode) Plans() []PlanNode {
-	panic("implement me")
-}
-
 // SortNode is an in memory sort of the working set
 type SortNode struct {
 	Keys   []string
 	Method string
-}
-
-func (s *SortNode) Output() []string {
-	panic("implement me")
-}
-
-func (s *SortNode) ParentRelationship() ParentRelationship {
-	panic("implement me")
-}
-
-func (s *SortNode) Plans() []PlanNode {
-	panic("implement me")
+	From   PlanNode
 }
 
 // NestedLoopNode is a join without indexes
 type NestedLoopNode struct {
 	JoinType string
-}
-
-func (n *NestedLoopNode) Output() []string {
-	panic("implement me")
-}
-
-func (n *NestedLoopNode) ParentRelationship() ParentRelationship {
-	panic("implement me")
-}
-
-func (n *NestedLoopNode) Plans() []PlanNode {
-	panic("implement me")
+	From     PlanNode
 }
 
 // LimitNode is a limit to the number of rows returned.
 type LimitNode struct {
-	Rows int
+	Value int
+	From  PlanNode
 }
 
-func (l *LimitNode) Output() []string {
-	panic("implement me")
-}
-
-func (l *LimitNode) ParentRelationship() ParentRelationship {
-	panic("implement me")
-}
-
-func (l *LimitNode) Plans() []PlanNode {
-	panic("implement me")
-}
-
-// OffsetNode is an offset of the working set.
+// OffsetNode discards a number of rows from the top of the set.
 type OffsetNode struct {
-	Rows int
-}
-
-func (o *OffsetNode) Output() []string {
-	panic("implement me")
-}
-
-func (o *OffsetNode) ParentRelationship() ParentRelationship {
-	panic("implement me")
-}
-
-func (o *OffsetNode) Plans() []PlanNode {
-	panic("implement me")
+	Value int
+	From  PlanNode
 }
 
 // FilterNode is a filter based on conditions in the where clause.
 type FilterNode struct {
-	Filter string
+	Filter Expr
+	From   PlanNode
 }
 
-func (f *FilterNode) Output() []string {
-	panic("implement me")
-}
-
-func (f *FilterNode) ParentRelationship() ParentRelationship {
-	panic("implement me")
-}
-
-func (f *FilterNode) Plans() []PlanNode {
-	panic("implement me")
-}
+func (*ProjectionNode) planNode() {}
+func (*TableScanNode) planNode()  {}
+func (*SortNode) planNode()       {}
+func (*NestedLoopNode) planNode() {}
+func (*LimitNode) planNode()      {}
+func (*OffsetNode) planNode()     {}
+func (*FilterNode) planNode()     {}
 
 type Catalog interface {
-	GetRelation(string) (*Relation, error)
+	GetRelation(string) (Relation, error)
+	// HasColumn checks if a column of this name exists in any relations of the catalog.
+	HasColumn(string) bool
+}
+
+type NodeSchema struct {
+	Relations map[string]Relation
 }
 
 type Relation struct {
@@ -156,6 +77,14 @@ type Relation struct {
 	Schema   map[string]Column
 }
 
+func (r Relation) HasColumn(name string) bool {
+	if _, ok := r.Schema[name]; ok {
+		return true
+	}
+	return false
+}
+
+// Column is the metadata about a relation's column
 type Column struct {
 	Name     string
 	Type     DataType
@@ -173,56 +102,195 @@ func NewPlanner(c Catalog) *Planner {
 func (p Planner) Plan(stmt Stmt) (PlanNode, error) {
 	switch s := stmt.(type) {
 	case *SelectStmt:
-		return p.planSelect(s)
-	default:
-		return nil, errors.New("unknown statement type")
-	}
-	// _, err := p.findRelations(stmt)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// return nil, nil
-}
-
-// findRelations walks the Stmt and find any relation referenced.
-// It returns an error if a relation is missing.
-func (p Planner) findRelations(stmt Stmt) ([]*Relation, error) {
-	var relations []*Relation
-	switch v := stmt.(type) {
-	case *SelectStmt:
-		n := v.TableName.Name
-		r, err := p.c.GetRelation(n)
-		if err != nil {
-			return nil, err
-		}
-		relations = append(relations, r)
-		return relations, nil
+		return planSelect(p.c, s)
 	default:
 		return nil, errors.New("unknown statement type")
 	}
 }
 
-func (p Planner) planSelect(stmt *SelectStmt) (PlanNode, error) {
-	/*
-		Plan todolist
-		1. Check all relations exists
-		2. Check all fields referenced in SELECT, WHERE, GROUPBY exist in one of the relations
-		3. Create Nodes starting from last operation:
-			1. Limit
-			2. Offset
-			3. Sort
-			4. NestedLoop
-			5. Filter
-			6. Scan
-	*/
-	n := stmt.TableName.Name
-	_, err := p.c.GetRelation(n)
+type planFunc func(Catalog, *SelectStmt) (PlanNode, error)
+
+func planSelect(catalog Catalog, stmt *SelectStmt) (PlanNode, error) {
+	if stmt.Limit == nil && stmt.Offset != nil {
+		return nil, errors.New("invalid SELECT: OFFSET without LIMIT")
+	}
+
+	var planFn planFunc
+	if stmt.Limit != nil {
+		planFn = planLimit
+	} else if stmt.Offset != nil {
+		planFn = planOffset
+
+	} else if stmt.OrderBy != nil {
+		planFn = planSort
+	} else {
+		planFn = planProjection
+	}
+	plan, err := planFn(catalog, stmt)
 	if err != nil {
 		return nil, err
 	}
-	// for _, field := range stmt.Fields {
-	//
-	// }
 
-	return nil, nil
+	return plan, nil
+}
+
+func planFilter(catalog Catalog, stmt *SelectStmt) (PlanNode, error) {
+	if err := validateExpr(catalog, stmt.Where.Predicate); err != nil {
+		return nil, err
+
+	}
+	plan := FilterNode{
+		Filter: stmt.Where.Predicate,
+	}
+
+	n, ok := stmt.From.TableName.(*Ident)
+	if !ok {
+		return nil, errors.New("invalid expression in FROM clause")
+	}
+	relation, err := catalog.GetRelation(n.Name)
+	if err != nil {
+		return nil, err
+	}
+	from, err := planTableScan(relation)
+	if err != nil {
+		return nil, err
+	}
+	plan.From = from
+
+	return &plan, nil
+}
+
+func planProjection(catalog Catalog, stmt *SelectStmt) (PlanNode, error) {
+	if len(stmt.Fields) == 0 {
+		return nil, errors.New("invalid statement: no columns in select")
+	}
+
+	n, ok := stmt.From.TableName.(*Ident)
+	if !ok {
+		return nil, errors.New("invalid expression in FROM clause")
+	}
+	relation, err := catalog.GetRelation(n.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	var cols []Ident
+	for _, field := range stmt.Fields {
+		if !relation.HasColumn(field.Name) {
+			return nil, fmt.Errorf("unknown column in statement: %s", field.Name)
+		}
+		cols = append(cols, field)
+	}
+	plan := ProjectionNode{
+		Columns: cols,
+	}
+
+	var from PlanNode
+	if stmt.Where != nil {
+		from, err = planFilter(catalog, stmt)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		from, err = planTableScan(relation)
+		if err != nil {
+			return nil, err
+		}
+	}
+	plan.From = from
+
+	return &plan, nil
+}
+
+func planLimit(catalog Catalog, stmt *SelectStmt) (PlanNode, error) {
+	plan := LimitNode{
+		Value: stmt.Limit.Value,
+	}
+
+	var planFn planFunc
+	if stmt.Offset != nil {
+		planFn = planOffset
+	} else if stmt.OrderBy != nil {
+		planFn = planSort
+	} else {
+		planFn = planProjection
+	}
+
+	from, err := planFn(catalog, stmt)
+	if err != nil {
+		return nil, err
+	}
+	plan.From = from
+
+	return &plan, nil
+}
+
+func planOffset(catalog Catalog, stmt *SelectStmt) (PlanNode, error) {
+	plan := OffsetNode{
+		Value: stmt.Offset.Value,
+	}
+
+	var planFn planFunc
+	if stmt.OrderBy != nil {
+		planFn = planSort
+	} else {
+		planFn = planProjection
+	}
+
+	from, err := planFn(catalog, stmt)
+	if err != nil {
+		return nil, err
+	}
+	plan.From = from
+
+	return &plan, nil
+}
+
+func planSort(catalog Catalog, stmt *SelectStmt) (PlanNode, error) {
+	var keys []string
+	for _, id := range stmt.OrderBy.Fields {
+		keys = append(keys, id.Name)
+	}
+	plan := SortNode{
+		Keys: keys,
+	}
+
+	from, err := planProjection(catalog, stmt)
+	if err != nil {
+		return nil, err
+	}
+	plan.From = from
+
+	return &plan, nil
+}
+
+func planTableScan(r Relation) (PlanNode, error) {
+	return &TableScanNode{
+		RelationName: r.Name,
+	}, nil
+}
+
+// validateExpr walks through an expression and ensure all identifiers present exist in the catalog.
+func validateExpr(catalog Catalog, expr Expr) error {
+	switch e := expr.(type) {
+	case *Ident:
+		if catalog.HasColumn(e.Name) {
+			return nil
+		}
+		return fmt.Errorf("unknown column, \"%s\" in statement", e.Name)
+	case *BasicLit:
+		return nil
+	case *UnaryExpr:
+		return validateExpr(catalog, e.X)
+	case *BinaryExpr:
+		var err error
+		if err = validateExpr(catalog, e.LHS); err != nil {
+			return err
+		} else if err = validateExpr(catalog, e.RHS); err != nil {
+			return err
+		}
+		return nil
+	default:
+		return fmt.Errorf("invalid expression")
+	}
 }
